@@ -81,6 +81,9 @@ createApp({
         formatPhone(e) {
             let digits = e.target.value.replace(/\D/g, '');
             if (this.form.phone_country === 'ZA') {
+                // Autofill may include +27 country code — convert to local 0xx format
+                if (digits.startsWith('27') && digits.length > 10)
+                    digits = '0' + digits.slice(2);
                 digits = digits.slice(0, 10);
                 if (digits.length > 6)      digits = digits.slice(0,3) + '-' + digits.slice(3,6) + '-' + digits.slice(6);
                 else if (digits.length > 3) digits = digits.slice(0,3) + '-' + digits.slice(3);
