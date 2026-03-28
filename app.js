@@ -7,29 +7,31 @@ createApp({
             submitting: false,
             submitted: false,
             errors: {},
+            showCountryDropdown: false,
             displayDate: today.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
             stepLabels: ['Your Details','Your Animal','Family & Group','Diet & Exercise','Veterinary Care','Health History','Observations','Consent'],
             phoneCountries: [
-                { code: 'ZA', dial: '+27',  label: '🇿🇦 +27'  },
-                { code: 'AU', dial: '+61',  label: '🇦🇺 +61'  },
-                { code: 'BW', dial: '+267', label: '🇧🇼 +267' },
-                { code: 'CA', dial: '+1',   label: '🇨🇦 +1'   },
-                { code: 'DE', dial: '+49',  label: '🇩🇪 +49'  },
-                { code: 'GB', dial: '+44',  label: '🇬🇧 +44'  },
-                { code: 'IE', dial: '+353', label: '🇮🇪 +353' },
-                { code: 'IN', dial: '+91',  label: '🇮🇳 +91'  },
-                { code: 'KE', dial: '+254', label: '🇰🇪 +254' },
-                { code: 'MU', dial: '+230', label: '🇲🇺 +230' },
-                { code: 'NA', dial: '+264', label: '🇳🇦 +264' },
-                { code: 'NL', dial: '+31',  label: '🇳🇱 +31'  },
-                { code: 'NZ', dial: '+64',  label: '🇳🇿 +64'  },
-                { code: 'NG', dial: '+234', label: '🇳🇬 +234' },
-                { code: 'US', dial: '+1',   label: '🇺🇸 +1'   },
-                { code: 'ZW', dial: '+263', label: '🇿🇼 +263' },
+                { code: 'ZA',    dial: '+27',  short: '🇿🇦 +27',  label: '🇿🇦 South Africa +27'   },
+                { code: 'AU',    dial: '+61',  short: '🇦🇺 +61',  label: '🇦🇺 Australia +61'       },
+                { code: 'BW',    dial: '+267', short: '🇧🇼 +267', label: '🇧🇼 Botswana +267'       },
+                { code: 'CA',    dial: '+1',   short: '🇨🇦 +1',   label: '🇨🇦 Canada +1'           },
+                { code: 'DE',    dial: '+49',  short: '🇩🇪 +49',  label: '🇩🇪 Germany +49'         },
+                { code: 'GB',    dial: '+44',  short: '🇬🇧 +44',  label: '🇬🇧 United Kingdom +44'  },
+                { code: 'IE',    dial: '+353', short: '🇮🇪 +353', label: '🇮🇪 Ireland +353'        },
+                { code: 'IN',    dial: '+91',  short: '🇮🇳 +91',  label: '🇮🇳 India +91'           },
+                { code: 'KE',    dial: '+254', short: '🇰🇪 +254', label: '🇰🇪 Kenya +254'          },
+                { code: 'MU',    dial: '+230', short: '🇲🇺 +230', label: '🇲🇺 Mauritius +230'      },
+                { code: 'AE',    dial: '+971', short: '🇦🇪 +971', label: '🇦🇪 UAE (Dubai) +971'   },
+                { code: 'NL',    dial: '+31',  short: '🇳🇱 +31',  label: '🇳🇱 Netherlands +31'     },
+                { code: 'NZ',    dial: '+64',  short: '🇳🇿 +64',  label: '🇳🇿 New Zealand +64'     },
+                { code: 'NG',    dial: '+234', short: '🇳🇬 +234', label: '🇳🇬 Nigeria +234'        },
+                { code: 'US',    dial: '+1',   short: '🇺🇸 +1',   label: '🇺🇸 United States +1'    },
+                { code: 'ZW',    dial: '+263', short: '🇿🇼 +263', label: '🇿🇼 Zimbabwe +263'       },
+                { code: 'OTHER', dial: '',     short: '🌐 Other', label: '🌐 Other'                 },
             ],
             form: {
                 // Step 1
-                owner_name: '', address: '', owner_email: '', phone: '', phone_country: 'ZA', referral: '',
+                owner_name: '', address: '', owner_email: '', phone: '', phone_country: 'ZA', phone_dial_custom: '', referral: '',
                 // Step 2
                 pet_name: '', species: '', breed: '', age: '',
                 sex: '', spayed_neutered: '', lives: '', sleeps: '',
@@ -55,6 +57,19 @@ createApp({
         };
     },
     computed: {},
+    watch: {
+        'form.phone'(val) {
+            if (this.form.phone_country !== 'ZA') return;
+            let digits = String(val).replace(/\D/g, '');
+            if (digits.startsWith('27') && digits.length > 10)
+                digits = '0' + digits.slice(2);
+            digits = digits.slice(0, 10);
+            let formatted = digits;
+            if (digits.length > 6) formatted = digits.slice(0,3) + '-' + digits.slice(3,6) + '-' + digits.slice(6);
+            else if (digits.length > 3) formatted = digits.slice(0,3) + '-' + digits.slice(3);
+            if (formatted !== val) this.form.phone = formatted;
+        }
+    },
     methods: {
         inputClass(err, val) {
             const base = 'w-full border rounded-lg px-3 py-2.5 text-sm transition-colors ';
@@ -78,17 +93,10 @@ createApp({
             const pct = ((val - 1) / (max - 1)) * 100;
             return { background: `linear-gradient(to right, #3d7a6a ${pct}%, #e5e7eb ${pct}%)` };
         },
-        formatPhone(e) {
-            let digits = e.target.value.replace(/\D/g, '');
-            if (this.form.phone_country === 'ZA') {
-                // Autofill may include +27 country code — convert to local 0xx format
-                if (digits.startsWith('27') && digits.length > 10)
-                    digits = '0' + digits.slice(2);
-                digits = digits.slice(0, 10);
-                if (digits.length > 6)      digits = digits.slice(0,3) + '-' + digits.slice(3,6) + '-' + digits.slice(6);
-                else if (digits.length > 3) digits = digits.slice(0,3) + '-' + digits.slice(3);
-            }
-            this.form.phone = digits;
+        phoneKeydown(e) {
+            const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+            if (allowed.includes(e.key) || e.ctrlKey || e.metaKey) return;
+            if (!/^\d$/.test(e.key)) e.preventDefault();
         },
         blurField(field) {
             const v = (this.form[field] || '').trim();
@@ -205,7 +213,7 @@ createApp({
                 'Owner Name': this.form.owner_name,
                 'Address': this.form.address,
                 'Owner Email': this.form.owner_email,
-                'Phone': (this.phoneCountries.find(c => c.code === this.form.phone_country)?.dial || '') + ' ' + this.form.phone,
+                'Phone': (this.form.phone_country === 'OTHER' ? this.form.phone_dial_custom : (this.phoneCountries.find(c => c.code === this.form.phone_country)?.dial || '')) + ' ' + this.form.phone,
                 'Referral': this.form.referral,
                 'Pet Name': this.form.pet_name,
                 'Species': this.form.species,
