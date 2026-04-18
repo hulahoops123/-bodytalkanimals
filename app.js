@@ -1,3 +1,17 @@
+// ─────────────────────────────────────────────
+// CONFIG — update these values for handover
+// ─────────────────────────────────────────────
+const CONFIG = {
+    // Google Apps Script web app URL (saves snapshot to Drive)
+    APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzg-i7Mq-0xLVdFBVZz3ZTd_zwuuuzzMsGr0gNvE2jda4SEcMcE8dbqdRG-oITVwRD9IQ/exec',
+
+    // EmailJS credentials
+    EMAILJS_SERVICE_ID:  'service_yyzqiep',
+    EMAILJS_TEMPLATE_ID: 'template_6klhwck',
+    EMAILJS_PUBLIC_KEY:  'ae8r1L_Oo_pWaOJTW',
+};
+// ─────────────────────────────────────────────
+
 const { createApp } = Vue;
 createApp({
     data() {
@@ -7,6 +21,8 @@ createApp({
             submitting: false,
             submitted: false,
             errors: {},
+            signaturePad: null,
+            signatureData: '',
             showCountryDropdown: false,
             displayDate: today.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
             stepLabels: ['Your Details','Your Animal','Family & Group','Diet & Exercise','Veterinary Care','Health History','Observations','Consent'],
@@ -58,6 +74,11 @@ createApp({
     },
     computed: {},
     watch: {
+        currentStep(val) {
+            if (val === 8 && !this.signaturePad) {
+                this.$nextTick(() => this.initSignaturePad());
+            }
+        },
         'form.phone'(val) {
             if (this.form.phone_country !== 'ZA') return;
             let digits = String(val).replace(/\D/g, '');
@@ -129,6 +150,25 @@ createApp({
         removeAnimal(i) { this.form.other_animals.splice(i, 1); },
         addConcern() { this.form.concerns.push({ issue: '', severity: 5 }); },
         removeConcern(i) { this.form.concerns.splice(i, 1); },
+        initSignaturePad() {
+            const canvas = document.getElementById('signature-canvas');
+            if (!canvas) return;
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width  = canvas.offsetWidth  * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext('2d').scale(ratio, ratio);
+            this.signaturePad = new SignaturePad(canvas, {
+                backgroundColor: 'rgba(255,255,255,0)',
+                penColor: '#1a1a1a',
+                minWidth: 0.5,
+                maxWidth: 2.5,
+            });
+        },
+        clearSignature() {
+            if (this.signaturePad) this.signaturePad.clear();
+            this.signatureData = '';
+            delete this.errors.signature;
+        },
         validate() {
             this.errors = {};
 
@@ -176,6 +216,8 @@ createApp({
             if (this.currentStep === 8) {
                 if (!this.form.consent_agreed)
                     this.errors.consent_agreed = 'Please agree to the consent form to continue.';
+                if (!this.signaturePad || this.signaturePad.isEmpty())
+                    this.errors.signature = 'Please sign before submitting.';
             }
 
             return Object.keys(this.errors).length === 0;
@@ -195,6 +237,30 @@ createApp({
             this.currentStep--;
             window.scrollTo({ top: 0, behavior: 'smooth' });
         },
+        devFill() {
+            Object.assign(this.form, {
+                owner_name: 'Jane Smith', address: '12 Acacia Ave, Cape Town', owner_email: 'jane@example.com',
+                phone: '083-123-4567', phone_country: 'ZA', referral: 'Friend',
+                pet_name: 'Buddy', species: 'Dog', breed: 'Labrador', age: '4 years',
+                sex: 'Male', spayed_neutered: 'Yes', lives: 'Indoors', sleeps: 'On the bed',
+                since_baby: 'Yes', time_with_owner: '4 years', adoption_source: 'Breeder', adoption_details: 'Healthy litter',
+                household_people: '2 adults, 1 child', frequent_contacts: 'Grandparents visit weekly',
+                other_animals: [{ name: 'Whiskers', type: 'Cat', age: '3 years', duration: '3 years', relationship: 3 }],
+                food_type: 'Dry kibble', food_brand: 'Royal Canin', exercise_program: '2 walks daily, 30 min each',
+                vet_name: 'Dr. van der Merwe', last_vet_visit: 'March 2026', vaccines: 'Up to date', vaccine_frequency: 'Annual', last_vaccination: 'March 2026',
+                health_history: 'Mild hip dysplasia diagnosed age 2', medications: 'Joint supplement daily',
+                concerns: [{ issue: 'Excessive licking of paws', severity: 6 }, { issue: 'Anxiety during thunderstorms', severity: 8 }],
+                issues_duration: '8 months', unique_circumstances: 'Started after move to new house', other_attempts: 'Tried calming treats',
+                energy_level: 'Medium', appetite: 'Good', bowel_movements: 'Regular', skin_coat: 'Slightly dry',
+                anxiety_stress: 'Moderate', body_sensitivity: 'Sensitive around hips', demeanour: 'Friendly',
+                with_strangers: 'Cautious at first', with_other_animals: 'Good with cats, reactive to dogs',
+                additional_info: 'Loves swimming. Dislikes loud noises.',
+                consent_agreed: true,
+            });
+            this.currentStep = 8;
+            this.$nextTick(() => this.initSignaturePad());
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
         autoResize(e) {
             e.target.style.height = 'auto';
             e.target.style.height = e.target.scrollHeight + 'px';
@@ -202,87 +268,57 @@ createApp({
         async submitForm() {
             if (!this.validate()) return;
             this.submitting = true;
-
-            const fd = new FormData();
-            fd.append('access_key', '1207f06d-2a57-40b8-a79a-ad57d6eba0ae');
-            fd.append('subject', `BodyTalk Intake — ${this.form.owner_name} / ${this.form.pet_name}`);
-            fd.append('from_name', 'BodyTalk Animals Intake Form');
-
-            const flat = {
-                'Date': this.displayDate,
-                'Owner Name': this.form.owner_name,
-                'Address': this.form.address,
-                'Owner Email': this.form.owner_email,
-                'Phone': (this.form.phone_country === 'OTHER' ? this.form.phone_dial_custom : (this.phoneCountries.find(c => c.code === this.form.phone_country)?.dial || '')) + ' ' + this.form.phone,
-                'Referral': this.form.referral,
-                'Pet Name': this.form.pet_name,
-                'Species': this.form.species,
-                'Breed': this.form.breed,
-                'Age': this.form.age,
-                'Sex': this.form.sex,
-                'Spayed/Neutered': this.form.spayed_neutered,
-                'Lives': this.form.lives,
-                'Sleeps': this.form.sleeps,
-                'Had Since Baby': this.form.since_baby,
-                'Time With Owner': this.form.time_with_owner,
-                'Adoption Source': this.form.adoption_source,
-                'Adoption Details': this.form.adoption_details,
-                'Household People': this.form.household_people,
-                'Frequent Contacts': this.form.frequent_contacts,
-                'Food Type': this.form.food_type,
-                'Food Brand': this.form.food_brand,
-                'Exercise Program': this.form.exercise_program,
-                'Veterinarian': this.form.vet_name,
-                'Last Vet Visit': this.form.last_vet_visit,
-                'Vaccines': this.form.vaccines,
-                'Vaccine Frequency': this.form.vaccine_frequency,
-                'Last Vaccination': this.form.last_vaccination,
-                'Health History': this.form.health_history,
-                'Medications': this.form.medications,
-                'Issues Duration': this.form.issues_duration,
-                'Unique Circumstances': this.form.unique_circumstances,
-                'Other Attempts': this.form.other_attempts,
-                'Energy Level': this.form.energy_level,
-                'Appetite': this.form.appetite,
-                'Bowel Movements': this.form.bowel_movements,
-                'Skin/Coat': this.form.skin_coat,
-                'Anxiety/Stress': this.form.anxiety_stress,
-                'Body Sensitivity': this.form.body_sensitivity,
-                'Demeanour': this.form.demeanour,
-                'With Strangers': this.form.with_strangers,
-                'With Other Animals': this.form.with_other_animals,
-                'Additional Info': this.form.additional_info,
-                'Consent Agreed': 'Yes',
-                'Consent Date': this.displayDate,
-            };
-
-            for (const [k, v] of Object.entries(flat)) {
-                if (v) fd.append(k, v);
-            }
-
-            this.form.other_animals.forEach((a, i) => {
-                if (a.name) {
-                    const stars = '★'.repeat(a.relationship) + '☆'.repeat(5 - a.relationship);
-                    fd.append(`Other Animal ${i + 1}`,
-                        `${a.name} | Age: ${a.age} | Type: ${a.type} | In family: ${a.duration} | Relationship: ${stars} (${a.relationship}/5)`);
-                }
-            });
-
-            this.form.concerns.forEach((c, i) => {
-                if (c.issue) fd.append(`Concern ${i + 1}`, `${c.issue} (Severity: ${c.severity}/10)`);
-            });
-
             try {
-                const res = await fetch('https://api.web3forms.com/submit', { method: 'POST', body: fd });
-                const data = await res.json();
-                if (data.success) {
-                    this.submitted = true;
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                } else {
-                    alert('Something went wrong. Please try again.');
-                }
-            } catch {
-                alert('Network error. Please check your connection and try again.');
+                // 1. Export drawn signature
+                this.signatureData = this.signaturePad.toDataURL('image/png');
+                await this.$nextTick(); // let Vue render signature into snapshot
+
+                // 2. Briefly bring snapshot on-screen so html2canvas can capture it
+                const snapshotEl = document.getElementById('form-snapshot');
+                snapshotEl.style.left = '0';
+                const capturedCanvas = await html2canvas(snapshotEl, {
+                    scale: 1.0,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    width: 1122,
+                    height: 795,
+                    logging: false,
+                });
+                snapshotEl.style.left = '-9999px';
+
+                const imageDataUrl = capturedCanvas.toDataURL('image/jpeg', 0.92);
+
+                // 3. Upload to Google Drive, get back a link
+                const uploadRes = await fetch(CONFIG.APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        image:      imageDataUrl,
+                        owner_name: this.form.owner_name,
+                        pet_name:   this.form.pet_name,
+                        date:       this.displayDate,
+                    }),
+                });
+                const uploadData = await uploadRes.json();
+                if (uploadData.error) throw new Error(uploadData.error);
+
+                // 4. Send via EmailJS with Drive link
+                await emailjs.send(
+                    CONFIG.EMAILJS_SERVICE_ID,
+                    CONFIG.EMAILJS_TEMPLATE_ID,
+                    {
+                        owner_name: this.form.owner_name,
+                        pet_name:   this.form.pet_name,
+                        date:       this.displayDate,
+                        snapshot:   uploadData.url,
+                    },
+                    CONFIG.EMAILJS_PUBLIC_KEY
+                );
+
+                this.submitted = true;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (err) {
+                console.error(err);
+                alert('Something went wrong. Please try again.');
             } finally {
                 this.submitting = false;
             }

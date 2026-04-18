@@ -43,10 +43,64 @@
             }
         }
     </style>
+
+    <!-- ── Snapshot styles — edit these to restyle the emailed A4 snapshot ── -->
+    <style>
+        /* Cell container */
+        .snap-cell {
+            border: 1px solid #7dbdaf;
+            border-radius: 5px;
+            padding: 9px;
+            overflow: hidden;
+            background: #f9fcfb;
+        }
+        /* Section heading (e.g. "1 · Your Details") */
+        .snap-heading {
+            font-size: 10.5px;
+            font-weight: 700;
+            color: #3d7a6a;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            border-bottom: 1px solid #c6e3db;
+            padding-bottom: 3px;
+            margin-bottom: 7px;
+        }
+        /* Body text inside each cell */
+        .snap-body {
+            font-size: 11.5px;
+            line-height: 1.65;
+            color: #374151;
+            word-break: break-word;
+        }
+        /* Field label (e.g. "OWNER ") */
+        .snap-label {
+            color: #9ca3af;
+            font-size: 10px;
+        }
+        /* Indented sub-item (other animals, concerns) */
+        .snap-sub {
+            padding-left: 6px;
+            border-left: 2px solid #c6e3db;
+            margin-top: 3px;
+        }
+        /* Sub-section title (e.g. "OTHER ANIMALS") */
+        .snap-sub-title {
+            color: #9ca3af;
+            font-size: 10px;
+            margin-top: 5px;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
 
 <div id="app" class="py-8 px-4">
+
+    <!-- DEV SHORTCUT — remove before deploy -->
+    <!-- <div style="position:fixed;bottom:16px;right:16px;z-index:9999;">
+        <button @click="devFill" style="background:#ef4444;color:#fff;font-size:11px;font-family:monospace;padding:6px 12px;border-radius:6px;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);">DEV: fill &amp; skip to 8</button>
+    </div> -->
 
     <!-- FULL HEADER — Step 1 only -->
     <header v-if="!submitted && currentStep === 1" class="text-center mb-8">
@@ -548,10 +602,24 @@
                     <input type="checkbox" v-model="form.consent_agreed"
                            class="mt-0.5 w-4 h-4 flex-shrink-0 accent-brand-500">
                     <span class="text-sm text-gray-700 leading-relaxed">
-                        I have read and agree to the consent form above. By checking this box I am providing my digital consent in lieu of a physical signature.
+                        I have read and agree to the consent form above.
                     </span>
                 </label>
                 <p v-if="errors.consent_agreed" class="err-msg mb-3">{{ errors.consent_agreed }}</p>
+
+                <!-- Signature pad -->
+                <div class="mt-5">
+                    <label class="field-label mb-2">Signature <span class="text-gray-400 font-normal">(draw with mouse or finger)</span></label>
+                    <div :class="['border rounded-lg overflow-hidden bg-white', errors.signature ? 'border-red-400 bg-red-50' : 'border-gray-300']">
+                        <canvas id="signature-canvas" style="width:100%;height:140px;display:block;touch-action:none;"></canvas>
+                    </div>
+                    <div class="flex justify-between items-center mt-1">
+                        <p v-if="errors.signature" class="err-msg">{{ errors.signature }}</p>
+                        <span v-else class="text-xs text-gray-400">Sign in the box above</span>
+                        <button type="button" @click="clearSignature"
+                                class="text-xs text-gray-400 hover:text-gray-600 transition-colors underline">Clear</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Navigation -->
@@ -573,8 +641,145 @@
             </div>
         </div>
     </div>
+
+    <!-- ── A4 Landscape Snapshot (off-screen, captured by html2canvas on submit) ── -->
+    <div id="form-snapshot" style="position:fixed;left:-9999px;top:0;width:1122px;height:795px;background:#fff;padding:14px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:1fr 1fr;gap:8px;height:100%;">
+
+        <!-- 1 · Your Details -->
+        <div class="snap-cell">
+          <div class="snap-heading">1 · Your Details</div>
+          <div class="snap-body">
+            <div><span class="snap-label">DATE </span>{{ displayDate }}</div>
+            <div><span class="snap-label">OWNER </span>{{ form.owner_name }}</div>
+            <div><span class="snap-label">ADDRESS </span>{{ form.address }}</div>
+            <div><span class="snap-label">EMAIL </span>{{ form.owner_email }}</div>
+            <div><span class="snap-label">PHONE </span>{{ (form.phone_country === 'OTHER' ? form.phone_dial_custom : (phoneCountries.find(c => c.code === form.phone_country)?.dial || '')) + ' ' + form.phone }}</div>
+            <div v-if="form.referral"><span class="snap-label">REFERRAL </span>{{ form.referral }}</div>
+          </div>
+        </div>
+
+        <!-- 2 · Your Animal -->
+        <div class="snap-cell">
+          <div class="snap-heading">2 · Your Animal</div>
+          <div class="snap-body">
+            <div><span class="snap-label">NAME </span>{{ form.pet_name }}</div>
+            <div><span class="snap-label">SPECIES </span>{{ form.species }}</div>
+            <div><span class="snap-label">BREED </span>{{ form.breed }}</div>
+            <div><span class="snap-label">AGE </span>{{ form.age }}</div>
+            <div><span class="snap-label">SEX </span>{{ form.sex }}<span v-if="form.spayed_neutered"> · {{ form.spayed_neutered === 'Yes' ? 'Spayed/Neutered' : 'Intact' }}</span></div>
+            <div v-if="form.lives"><span class="snap-label">LIVES </span>{{ form.lives }} · Sleeps {{ form.sleeps }}</div>
+            <div v-if="form.since_baby"><span class="snap-label">SINCE BABY </span>{{ form.since_baby }}</div>
+            <div v-if="form.time_with_owner"><span class="snap-label">TIME W/ OWNER </span>{{ form.time_with_owner }}</div>
+            <div v-if="form.adoption_source && form.adoption_source !== 'N/A'"><span class="snap-label">ADOPTED FROM </span>{{ form.adoption_source }}</div>
+            <div v-if="form.adoption_details"><span class="snap-label">ADOPTION NOTES </span>{{ form.adoption_details }}</div>
+          </div>
+        </div>
+
+        <!-- 3 · Family & Group -->
+        <div class="snap-cell">
+          <div class="snap-heading">3 · Family & Group</div>
+          <div class="snap-body">
+            <div v-if="form.household_people"><span class="snap-label">HOUSEHOLD </span>{{ form.household_people }}</div>
+            <div v-if="form.frequent_contacts"><span class="snap-label">FREQ. CONTACTS </span>{{ form.frequent_contacts }}</div>
+            <template v-if="form.other_animals.length">
+              <div class="snap-sub-title">OTHER ANIMALS</div>
+              <template v-for="(a,i) in form.other_animals" :key="i">
+                <div class="snap-sub">
+                  <span style="font-weight:600;">{{ a.name }}</span>
+                  <span v-if="a.type"> · {{ a.type }}</span>
+                  <span v-if="a.age"> · {{ a.age }}</span>
+                  <span v-if="a.duration"> · {{ a.duration }}</span>
+                  <span v-if="a.relationship"> · {{ a.relationship }}/5</span>
+                </div>
+              </template>
+            </template>
+          </div>
+        </div>
+
+        <!-- 4 · Diet & Exercise -->
+        <div class="snap-cell">
+          <div class="snap-heading">4 · Diet & Exercise</div>
+          <div class="snap-body">
+            <div v-if="form.food_type"><span class="snap-label">FOOD TYPE </span>{{ form.food_type }}</div>
+            <div v-if="form.food_brand"><span class="snap-label">BRAND </span>{{ form.food_brand }}</div>
+            <div v-if="form.exercise_program"><span class="snap-label">EXERCISE </span>{{ form.exercise_program }}</div>
+          </div>
+        </div>
+
+        <!-- 5 · Veterinary Care -->
+        <div class="snap-cell">
+          <div class="snap-heading">5 · Veterinary Care</div>
+          <div class="snap-body">
+            <div v-if="form.vet_name"><span class="snap-label">VET </span>{{ form.vet_name }}</div>
+            <div v-if="form.last_vet_visit"><span class="snap-label">LAST VISIT </span>{{ form.last_vet_visit }}</div>
+            <div v-if="form.vaccines"><span class="snap-label">VACCINES </span>{{ form.vaccines }}</div>
+            <div v-if="form.vaccine_frequency"><span class="snap-label">FREQ. </span>{{ form.vaccine_frequency }}</div>
+            <div v-if="form.last_vaccination"><span class="snap-label">LAST VACC. </span>{{ form.last_vaccination }}</div>
+          </div>
+        </div>
+
+        <!-- 6 · Health History -->
+        <div class="snap-cell">
+          <div class="snap-heading">6 · Health History</div>
+          <div class="snap-body">
+            <div v-if="form.health_history"><span class="snap-label">HISTORY </span>{{ form.health_history }}</div>
+            <div v-if="form.medications"><span class="snap-label">MEDICATIONS </span>{{ form.medications }}</div>
+            <template v-if="form.concerns.some(c => c.issue)">
+              <div class="snap-sub-title">CONCERNS</div>
+              <template v-for="(c,i) in form.concerns" :key="i">
+                <div v-if="c.issue" class="snap-sub">
+                  {{ c.issue }} <span style="color:#9ca3af;">({{ c.severity }}/10)</span>
+                </div>
+              </template>
+            </template>
+            <div v-if="form.issues_duration"><span class="snap-label">DURATION </span>{{ form.issues_duration }}</div>
+            <div v-if="form.unique_circumstances"><span class="snap-label">CIRCUMSTANCES </span>{{ form.unique_circumstances }}</div>
+            <div v-if="form.other_attempts"><span class="snap-label">OTHER ATTEMPTS </span>{{ form.other_attempts }}</div>
+          </div>
+        </div>
+
+        <!-- 7 · Observations -->
+        <div class="snap-cell">
+          <div class="snap-heading">7 · Observations</div>
+          <div class="snap-body">
+            <div v-if="form.energy_level"><span class="snap-label">ENERGY </span>{{ form.energy_level }}</div>
+            <div v-if="form.appetite"><span class="snap-label">APPETITE </span>{{ form.appetite }}</div>
+            <div v-if="form.bowel_movements"><span class="snap-label">BOWELS </span>{{ form.bowel_movements }}</div>
+            <div v-if="form.skin_coat"><span class="snap-label">SKIN/COAT </span>{{ form.skin_coat }}</div>
+            <div v-if="form.anxiety_stress"><span class="snap-label">ANXIETY </span>{{ form.anxiety_stress }}</div>
+            <div v-if="form.body_sensitivity"><span class="snap-label">BODY SENS. </span>{{ form.body_sensitivity }}</div>
+            <div v-if="form.demeanour"><span class="snap-label">DEMEANOUR </span>{{ form.demeanour }}</div>
+            <div v-if="form.with_strangers"><span class="snap-label">W/ STRANGERS </span>{{ form.with_strangers }}</div>
+            <div v-if="form.with_other_animals"><span class="snap-label">W/ ANIMALS </span>{{ form.with_other_animals }}</div>
+            <div v-if="form.additional_info"><span class="snap-label">NOTES </span>{{ form.additional_info }}</div>
+          </div>
+        </div>
+
+        <!-- 8 · Consent & Signature -->
+        <div class="snap-cell">
+          <div class="snap-heading">8 · Consent</div>
+          <div class="snap-body">
+            <div><span class="snap-label">NAME </span>{{ form.owner_name }}</div>
+            <div><span class="snap-label">DATE </span>{{ displayDate }}</div>
+            <div><span class="snap-label">CONSENT </span>Agreed ✓</div>
+            <div class="snap-sub-title" style="margin-top:10px;">SIGNATURE</div>
+            <div style="margin-top:5px;border:1px solid #e5e7eb;border-radius:4px;background:#fff;padding:4px;">
+              <img v-if="signatureData" :src="signatureData" style="max-width:100%;max-height:90px;display:block;">
+              <div v-else style="height:60px;display:flex;align-items:center;justify-content:center;color:#d1d5db;" class="snap-label">No signature</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.2.0/dist/signature_pad.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>emailjs.init('ae8r1L_Oo_pWaOJTW');</script>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="app.js"></script>
 </body>
